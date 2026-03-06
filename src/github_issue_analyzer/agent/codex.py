@@ -21,7 +21,7 @@ class CodexAdapter(AgentAdapter):
     ) -> AgentResponse:
         timeout = estimate_timeout
         prompt = self._build_prompt(request)
-        schema = TypeAdapter(AgentResponse).json_schema()
+        schema = self._build_output_schema()
 
         for attempt in range(2):
             try:
@@ -54,19 +54,62 @@ class CodexAdapter(AgentAdapter):
             )
 
             try:
-                await asyncio.wait_for(process.communicate(), timeout=timeout)
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
             except asyncio.TimeoutError:
                 process.kill()
                 raise
 
             if process.returncode != 0:
-                raise ValueError("codex exec failed")
+                details = self._format_process_error(stdout, stderr)
+                raise ValueError(f"codex exec failed{details}")
 
             if not output_path.exists():
-                raise ValueError("codex output file missing")
+                details = self._format_process_error(stdout, stderr)
+                raise ValueError(f"codex output file missing{details}")
 
             payload = json.loads(output_path.read_text(encoding="utf-8"))
             return AgentResponse.model_validate(payload)
+
+    def _build_output_schema(self) -> dict:
+        schema = TypeAdapter(AgentResponse).json_schema()
+        return self._normalize_schema(schema)
+
+    def _normalize_schema(self, node):
+        if isinstance(node, list):
+            return [self._normalize_schema(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+
+        normalized = {}
+        for key, value in node.items():
+            if key in {"default", "title"}:
+                continue
+            normalized[key] = self._normalize_schema(value)
+
+        if normalized.get("type") == "object" or "properties" in normalized:
+            properties = normalized.setdefault("properties", {})
+            normalized["required"] = list(properties.keys())
+            normalized["additionalProperties"] = False
+
+        return normalized
+
+    def _format_process_error(self, stdout: bytes, stderr: bytes) -> str:
+        stderr_text = stderr.decode("utf-8", errors="replace").strip()
+        stdout_text = stdout.decode("utf-8", errors="replace").strip()
+        combined = stderr_text or stdout_text
+        if not combined:
+            return ""
+        lines = [line.strip() for line in combined.splitlines() if line.strip()]
+        priority_lines = [
+            line
+            for line in lines
+            if any(token in line.lower() for token in ("error", "failed", "denied", "timed out", "missing"))
+        ]
+        excerpt_lines = priority_lines[-6:] if priority_lines else lines[-6:]
+        excerpt = " | ".join(excerpt_lines)
+        if len(lines) > len(excerpt_lines):
+            excerpt += " | ..."
+        return f": {excerpt}"
 
     def _build_prompt(self, request: AgentRequest) -> str:
         accepted_comments = "\n".join(

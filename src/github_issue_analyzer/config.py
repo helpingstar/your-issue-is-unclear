@@ -10,6 +10,30 @@ from github_issue_analyzer.models import AppRuntimeSettings, FileConfig
 from github_issue_analyzer.paths import AppPaths
 
 
+def _load_dotenv_file(env_path: Path) -> None:
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", maxsplit=1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
 def load_file_config(config_path: Path) -> FileConfig:
     data = {}
     if config_path.exists():
@@ -41,6 +65,7 @@ def load_runtime_settings() -> AppRuntimeSettings:
 
 
 def load_configuration(project_root: Path, config_path: Path) -> tuple[FileConfig, AppRuntimeSettings, AppPaths]:
+    _load_dotenv_file(project_root / ".env")
     file_config = load_file_config(config_path)
     runtime = load_runtime_settings()
     paths = AppPaths.from_environment(project_root=project_root, config_file=config_path)

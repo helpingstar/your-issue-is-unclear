@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from github_issue_analyzer.db import StateStore
 from github_issue_analyzer.models import FileConfig, RepoConfig
+from github_issue_analyzer.utils import ensure_utc_datetime
 from github_issue_analyzer.workflow.service import WorkflowService
 
 
@@ -43,14 +44,15 @@ class WorkerService:
 
         now = datetime.now(UTC)
         interval = timedelta(seconds=repo.resolved_polling_interval(self.file_config.defaults))
-        if registration.last_issue_poll_at and now - registration.last_issue_poll_at < interval:
+        last_issue_poll_at = ensure_utc_datetime(registration.last_issue_poll_at)
+        if last_issue_poll_at and now - last_issue_poll_at < interval:
             return
 
         issues = await self.workflow_service.github_client.list_updated_issues(
             repo.owner,
             repo.repo,
             installation_id=registration.app_installation_id,
-            since=registration.last_issue_poll_at,
+            since=last_issue_poll_at,
         )
         for issue in sorted(issues, key=lambda item: item["updated_at"]):
             await self.workflow_service.process_issue(repo, issue["number"])
@@ -65,7 +67,8 @@ class WorkerService:
         now = datetime.now(UTC)
 
         for session in sessions:
-            if session.last_polled_at and now - session.last_polled_at < interval:
+            last_polled_at = ensure_utc_datetime(session.last_polled_at)
+            if last_polled_at and now - last_polled_at < interval:
                 continue
             repo = repos.get(session.owner_repo)
             if repo is None:

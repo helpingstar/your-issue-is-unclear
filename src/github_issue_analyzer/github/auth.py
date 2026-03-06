@@ -41,7 +41,7 @@ class GitHubAppAuth:
         payload = {
             "iat": int((now - timedelta(seconds=30)).timestamp()),
             "exp": int((now + timedelta(minutes=9)).timestamp()),
-            "iss": self.app_id,
+            "iss": str(self.app_id),
         }
         return jwt.encode(payload, self.private_key, algorithm="RS256")
 

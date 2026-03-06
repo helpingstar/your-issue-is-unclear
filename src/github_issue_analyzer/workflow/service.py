@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+import httpx
+
 from github_issue_analyzer.agent.base import AgentAdapter
 from github_issue_analyzer.db import (
     ClarificationSessionORM,
@@ -60,9 +62,28 @@ class WorkflowService:
         if registration is None or registration.app_installation_id is None:
             raise RuntimeError(f"Repo is not bootstrapped: {repo.owner_repo}")
 
-        issue = await self.github_client.get_issue(
-            repo.owner, repo.repo, issue_number, installation_id=registration.app_installation_id
-        )
+        try:
+            issue = await self.github_client.get_issue(
+                repo.owner, repo.repo, issue_number, installation_id=registration.app_installation_id
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (404, 410):
+                logger.warning(
+                    "issue no longer available; skipping %s#%s with status %s",
+                    repo.owner_repo,
+                    issue_number,
+                    exc.response.status_code,
+                )
+                self.state_store.supersede_clarification_sessions(repo.owner_repo, issue_number)
+                self.state_store.update_issue_record(
+                    repo.owner_repo,
+                    issue_number,
+                    issue_state="gone",
+                    active_clarification_round=None,
+                    active_clarification_comment_id=None,
+                )
+                return
+            raise
         if "pull_request" in issue:
             return
 
