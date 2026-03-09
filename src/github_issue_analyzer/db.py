@@ -214,6 +214,18 @@ class StateStore:
         with self.session() as session:
             return list(session.scalars(stmt))
 
+    def list_clarification_sessions_for_issue(
+        self, owner_repo: str, issue_number: int
+    ) -> list[ClarificationSessionORM]:
+        stmt = (
+            select(ClarificationSessionORM)
+            .where(ClarificationSessionORM.owner_repo == owner_repo)
+            .where(ClarificationSessionORM.issue_number == issue_number)
+            .order_by(ClarificationSessionORM.round.asc(), ClarificationSessionORM.id.asc())
+        )
+        with self.session() as session:
+            return list(session.scalars(stmt))
+
     def supersede_clarification_sessions(self, owner_repo: str, issue_number: int) -> None:
         now = utcnow()
         with self.session() as session:

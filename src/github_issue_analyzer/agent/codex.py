@@ -141,6 +141,67 @@ class CodexAdapter(AgentAdapter):
         clarification_answers = "\n".join(
             f"- {line}" for line in request.clarification_answers
         )
+        clarification_example = json.dumps(
+            {
+                "status": "needs_clarification",
+                "ready_for_estimate": False,
+                "missing_slots": ["desired_behavior"],
+                "question_specs": [
+                    {
+                        "question_id": "q1_today_top_behavior",
+                        "slot": "desired_behavior",
+                        "type": "single-select",
+                        "min_select": 1,
+                        "max_select": 1,
+                        "prompt": "`오늘 시위 맨 위에 보는 기능`이 정확히 어떤 동작을 뜻하는지 확인이 필요합니다. 현재 일정 화면은 날짜별 섹션을 그려서 목록으로 보여주고 있어 구현 방식에 따라 범위가 크게 달라집니다.",
+                        "options": [
+                            "today_section_first",
+                            "scroll_to_today",
+                            "today_only_filter",
+                            "답변 보류",
+                        ],
+                        "recommended_option": "today_section_first",
+                        "option_descriptions": [
+                            "오늘 날짜 섹션이 있으면 그 섹션만 목록 맨 위로 재정렬합니다. 현재 구조상 가장 작은 변경입니다.",
+                            "목록 정렬은 유지하고, 상단에 `오늘 보기` 같은 액션을 추가해 오늘 섹션으로 바로 이동합니다.",
+                            "오늘 일정만 따로 모아 보여주거나 오늘만 보도록 필터를 추가합니다. UI와 상태 변경 범위가 가장 큽니다.",
+                            "지금 단계에서는 답변을 보류합니다.",
+                        ],
+                    }
+                ],
+                "estimate": None,
+                "error_message": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        estimate_example = json.dumps(
+            {
+                "status": "estimated",
+                "ready_for_estimate": True,
+                "missing_slots": [],
+                "question_specs": [],
+                "estimate": {
+                    "base_commit": "abc123def456",
+                    "lines_added_min": 30,
+                    "lines_added_max": 80,
+                    "lines_modified_min": 50,
+                    "lines_modified_max": 140,
+                    "lines_deleted_min": 0,
+                    "lines_deleted_max": 20,
+                    "lines_total_min": 80,
+                    "lines_total_max": 240,
+                    "files": ["app/schedule/view.py", "app/schedule/controller.py"],
+                    "reasons": [
+                        "오늘 날짜 섹션을 맨 위로 재정렬하려면 일정 정렬 로직과 날짜 그룹 렌더링이 함께 바뀔 가능성이 큽니다.",
+                        "기존 목록 스크롤 위치와 오늘 섹션 계산이 연결돼 있다면 상태 처리 코드도 수정이 필요합니다.",
+                    ],
+                },
+                "error_message": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
         return f"""
 You are serving as the repository analysis agent for {BOT_NAME}.
 Adopt this engineer profile while analyzing the issue and repository: {self.role}.
@@ -172,6 +233,19 @@ Output language:
 Write all human-readable strings in the requested output language.
 This includes clarification question prompts, options, option descriptions, estimate reasons, and error messages.
 Do not translate file paths, branch names, repository names, issue numbers, or commit SHAs.
+When you return `question_specs`, every `question_id` must be a stable machine-readable token using only letters, digits, `_`, or `-`.
+When you return `question_specs`, keep the structure machine-readable JSON and let the application render the final GitHub markdown comment.
+The application will render clarification questions as `Q1`, `Q2`, ... in GitHub comments, so `question_id` is an internal machine key, not the final visible heading.
+
+Example JSON for `needs_clarification`:
+```json
+{clarification_example}
+```
+
+Example JSON for `estimated`:
+```json
+{estimate_example}
+```
 
 Return JSON only and follow the provided schema exactly.
 """.strip()

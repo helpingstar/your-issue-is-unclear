@@ -172,3 +172,17 @@ def test_codex_adapter_defaults_role_to_android_developer(tmp_path: Path) -> Non
     prompt = adapter._build_prompt(build_request(tmp_path))
 
     assert "Adopt this engineer profile while analyzing the issue and repository: Android developer." in prompt
+
+
+def test_codex_adapter_includes_json_examples_for_clarification_and_estimate(tmp_path: Path) -> None:
+    adapter = CodexAdapter(command="codex")
+
+    prompt = adapter._build_prompt(build_request(tmp_path))
+
+    assert 'Example JSON for `needs_clarification`:' in prompt
+    assert '"status": "needs_clarification"' in prompt
+    assert '"question_id": "q1_today_top_behavior"' in prompt
+    assert '"status": "estimated"' in prompt
+    assert '"files": [' in prompt
+    assert "stable machine-readable token using only letters, digits, `_`, or `-`" in prompt
+    assert "The application will render clarification questions as `Q1`, `Q2`, ..." in prompt
