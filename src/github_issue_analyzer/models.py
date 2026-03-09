@@ -4,7 +4,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class WorkflowState(StrEnum):
@@ -39,6 +39,10 @@ class RepoConfig(BaseModel):
     base_branch_override: str | None = None
     agent_backend_override: str | None = None
     checkout_path_override: str | None = None
+    project_v2_url: str | None = None
+    project_v2_title: str | None = None
+    project_v2_impact_field_name: str | None = None
+    project_v2_create_if_missing: bool = False
     enabled: bool = True
 
     @field_validator("owner_repo")
@@ -47,6 +51,25 @@ class RepoConfig(BaseModel):
         if value.count("/") != 1:
             raise ValueError("owner_repo must be in 'owner/repo' format")
         return value
+
+    @model_validator(mode="after")
+    def validate_project_v2_config(self) -> "RepoConfig":
+        has_url = bool(self.project_v2_url)
+        has_title = bool(self.project_v2_title)
+        has_field_name = bool(self.project_v2_impact_field_name)
+        if has_url and has_title:
+            raise ValueError(
+                "project_v2_url and project_v2_title are mutually exclusive"
+            )
+        if (has_url or has_title) != has_field_name:
+            raise ValueError(
+                "project_v2_impact_field_name must be set together with project_v2_url or project_v2_title"
+            )
+        if self.project_v2_create_if_missing and not has_title:
+            raise ValueError(
+                "project_v2_create_if_missing requires project_v2_title"
+            )
+        return self
 
     @property
     def owner(self) -> str:
@@ -65,6 +88,10 @@ class RepoConfig(BaseModel):
     def resolved_polling_interval(self, defaults: RepoDefaults) -> int:
         return self.polling_interval_seconds or defaults.polling_interval_seconds
 
+    @property
+    def project_v2_enabled(self) -> bool:
+        return bool((self.project_v2_url or self.project_v2_title) and self.project_v2_impact_field_name)
+
 
 class FileConfig(BaseModel):
     defaults: RepoDefaults = Field(default_factory=RepoDefaults)
@@ -75,6 +102,7 @@ class AppRuntimeSettings(BaseModel):
     github_app_id: int
     github_app_private_key_path: Path
     github_api_base_url: str = "https://api.github.com"
+    github_project_token: str | None = None
     clarification_debounce_seconds: int = 10
     active_clarification_polling_seconds: int = 10
     clarification_timeout_seconds: int = 300
@@ -116,6 +144,10 @@ class EstimateResult(BaseModel):
     confidence: Confidence
     files: list[str]
     reasons: list[str]
+
+    def representative_total_impact(self) -> int:
+        total = self.lines_total_min + self.lines_total_max
+        return (total + 1) // 2
 
 
 class AgentResponse(BaseModel):

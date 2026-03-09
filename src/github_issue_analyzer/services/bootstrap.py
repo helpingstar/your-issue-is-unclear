@@ -9,6 +9,7 @@ from github_issue_analyzer.github.client import GitHubClient
 from github_issue_analyzer.models import FileConfig, RepoConfig
 from github_issue_analyzer.paths import AppPaths
 from github_issue_analyzer.services.checkout import CheckoutManager
+from github_issue_analyzer.services.project_metadata import ProjectMetadataService
 from github_issue_analyzer.workflow.comments import BOOTSTRAP_LABEL_SPECS
 
 
@@ -23,12 +24,14 @@ class BootstrapService:
         checkout_manager: CheckoutManager,
         file_config: FileConfig,
         paths: AppPaths,
+        project_metadata_service: ProjectMetadataService,
     ) -> None:
         self.github_client = github_client
         self.state_store = state_store
         self.checkout_manager = checkout_manager
         self.file_config = file_config
         self.paths = paths
+        self.project_metadata_service = project_metadata_service
 
     async def run(self, owner_repo: str | None = None) -> None:
         repos = [repo for repo in self.file_config.repos if repo.enabled]
@@ -47,6 +50,7 @@ class BootstrapService:
         token = await self.github_client.auth.get_installation_token(installation_id)
         await self.checkout_manager.ensure_checkout(repo.owner_repo, checkout_path, default_branch, token)
         await self._ensure_labels(repo, installation_id)
+        await self.project_metadata_service.validate_repo_config(repo, installation_id)
 
         self.state_store.sync_repo_registration(
             repo=repo,

@@ -47,6 +47,7 @@ def load_runtime_settings() -> AppRuntimeSettings:
         "github_app_id": os.getenv("GIA_GITHUB_APP_ID"),
         "github_app_private_key_path": os.getenv("GIA_GITHUB_APP_PRIVATE_KEY_PATH"),
         "github_api_base_url": os.getenv("GIA_GITHUB_API_BASE_URL", "https://api.github.com"),
+        "github_project_token": os.getenv("GIA_GITHUB_PROJECT_TOKEN"),
         "clarification_debounce_seconds": os.getenv("GIA_CLARIFICATION_DEBOUNCE_SECONDS", "10"),
         "active_clarification_polling_seconds": os.getenv(
             "GIA_ACTIVE_CLARIFICATION_POLLING_SECONDS", "10"

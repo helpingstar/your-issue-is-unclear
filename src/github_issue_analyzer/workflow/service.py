@@ -15,6 +15,7 @@ from github_issue_analyzer.github.client import GitHubClient
 from github_issue_analyzer.models import (
     AgentRequest,
     AgentResponse,
+    EstimateResult,
     FileConfig,
     RecognizedComment,
     RepoConfig,
@@ -22,6 +23,7 @@ from github_issue_analyzer.models import (
 )
 from github_issue_analyzer.paths import AppPaths
 from github_issue_analyzer.services.checkout import CheckoutManager
+from github_issue_analyzer.services.project_metadata import ProjectMetadataService
 from github_issue_analyzer.utils import hash_text, is_command_comment, is_free_text_answer_comment
 from github_issue_analyzer.workflow.clarification import parse_clarification_comment_body
 from github_issue_analyzer.workflow.comments import (
@@ -48,6 +50,7 @@ class WorkflowService:
         paths: AppPaths,
         runtime_settings,
         agent_factory,
+        project_metadata_service: ProjectMetadataService,
     ) -> None:
         self.github_client = github_client
         self.state_store = state_store
@@ -56,6 +59,7 @@ class WorkflowService:
         self.paths = paths
         self.runtime_settings = runtime_settings
         self.agent_factory = agent_factory
+        self.project_metadata_service = project_metadata_service
 
     async def process_issue(self, repo: RepoConfig, issue_number: int, force_refresh: bool = False) -> None:
         registration = self.state_store.get_repo_registration(repo.owner_repo)
@@ -161,6 +165,7 @@ class WorkflowService:
                 registration.app_installation_id,
             )
             await self._clear_confidence_label(repo, issue_number, registration.app_installation_id)
+            await self._clear_project_estimate(repo, issue, registration.app_installation_id)
             await self.github_client.create_issue_comment(
                 repo.owner,
                 repo.repo,
@@ -330,6 +335,13 @@ class WorkflowService:
                     render_stale_comment(issue_record.base_commit_sha, current_head, matched_files),
                     installation_id=registration.app_installation_id,
                 )
+                stale_issue = await self.github_client.get_issue(
+                    repo.owner,
+                    repo.repo,
+                    issue_record.issue_number,
+                    installation_id=registration.app_installation_id,
+                )
+                await self._clear_project_estimate(repo, stale_issue, registration.app_installation_id)
                 self.state_store.update_issue_record(
                     repo.owner_repo,
                     issue_record.issue_number,
@@ -387,6 +399,7 @@ class WorkflowService:
             base_commit_sha=base_commit,
         )
         await self._set_state(repo, issue_number, WorkflowState.NEEDS_CLARIFICATION, installation_id)
+        await self._clear_project_estimate(repo, issue, installation_id)
 
     async def _handle_estimated(
         self,
@@ -449,6 +462,7 @@ class WorkflowService:
             response.estimate.confidence.value,
             installation_id,
         )
+        await self._sync_project_estimate(repo, issue, installation_id, response.estimate)
 
     async def _parse_active_clarification(
         self,
@@ -582,3 +596,36 @@ class WorkflowService:
                 await self.github_client.remove_label_from_issue(
                     repo.owner, repo.repo, issue_number, label, installation_id=installation_id
                 )
+
+    async def _sync_project_estimate(
+        self,
+        repo: RepoConfig,
+        issue: dict,
+        installation_id: int,
+        estimate: EstimateResult,
+    ) -> None:
+        try:
+            await self.project_metadata_service.sync_estimate(repo, issue, installation_id, estimate)
+        except Exception:
+            logger.warning(
+                "failed to sync GitHub Project metadata for %s#%s",
+                repo.owner_repo,
+                issue["number"],
+                exc_info=True,
+            )
+
+    async def _clear_project_estimate(
+        self,
+        repo: RepoConfig,
+        issue: dict,
+        installation_id: int,
+    ) -> None:
+        try:
+            await self.project_metadata_service.clear_estimate(repo, issue, installation_id)
+        except Exception:
+            logger.warning(
+                "failed to clear GitHub Project metadata for %s#%s",
+                repo.owner_repo,
+                issue["number"],
+                exc_info=True,
+            )

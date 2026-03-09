@@ -11,10 +11,12 @@ from github_issue_analyzer.config import load_configuration
 from github_issue_analyzer.db import StateStore
 from github_issue_analyzer.github.auth import GitHubAppAuth
 from github_issue_analyzer.github.client import GitHubClient
+from github_issue_analyzer.github.personal_project_client import PersonalProjectClient
 from github_issue_analyzer.logging import configure_logging
 from github_issue_analyzer.paths import AppPaths
 from github_issue_analyzer.services.bootstrap import BootstrapService
 from github_issue_analyzer.services.checkout import CheckoutManager
+from github_issue_analyzer.services.project_metadata import ProjectMetadataService
 from github_issue_analyzer.services.refresh import RefreshService
 from github_issue_analyzer.services.worker import WorkerService
 from github_issue_analyzer.workflow.service import WorkflowService
@@ -45,7 +47,14 @@ def _build_dependencies(config_path: Path):
         api_base_url=runtime.github_api_base_url,
     )
     github_client = GitHubClient(auth=auth, api_base_url=runtime.github_api_base_url)
+    personal_project_client = None
+    if runtime.github_project_token:
+        personal_project_client = PersonalProjectClient(
+            token=runtime.github_project_token,
+            api_base_url=runtime.github_api_base_url,
+        )
     checkout_manager = CheckoutManager()
+    project_metadata_service = ProjectMetadataService(github_client, personal_project_client)
     workflow_service = WorkflowService(
         github_client=github_client,
         state_store=state_store,
@@ -54,11 +63,28 @@ def _build_dependencies(config_path: Path):
         paths=paths,
         runtime_settings=runtime,
         agent_factory=build_agent_adapter,
+        project_metadata_service=project_metadata_service,
     )
-    return file_config, runtime, paths, state_store, auth, github_client, workflow_service
+    return (
+        file_config,
+        runtime,
+        paths,
+        state_store,
+        auth,
+        github_client,
+        personal_project_client,
+        workflow_service,
+        project_metadata_service,
+    )
 
 
-async def _close_clients(auth: GitHubAppAuth, github_client: GitHubClient) -> None:
+async def _close_clients(
+    auth: GitHubAppAuth,
+    github_client: GitHubClient,
+    personal_project_client: PersonalProjectClient | None,
+) -> None:
+    if personal_project_client is not None:
+        await personal_project_client.close()
     await github_client.close()
     await auth.close()
 
@@ -69,18 +95,29 @@ def bootstrap(
     config: Path = typer.Option(_default_config_path(), exists=False, help="Path to repos.toml"),
 ) -> None:
     async def runner() -> None:
-        file_config, _, paths, state_store, auth, github_client, workflow_service = _build_dependencies(config)
+        (
+            file_config,
+            _,
+            paths,
+            state_store,
+            auth,
+            github_client,
+            personal_project_client,
+            workflow_service,
+            project_metadata_service,
+        ) = _build_dependencies(config)
         service = BootstrapService(
             github_client=github_client,
             state_store=state_store,
             checkout_manager=CheckoutManager(),
             file_config=file_config,
             paths=paths,
+            project_metadata_service=project_metadata_service,
         )
         try:
             await service.run(owner_repo=owner_repo)
         finally:
-            await _close_clients(auth, github_client)
+            await _close_clients(auth, github_client, personal_project_client)
 
     asyncio.run(runner())
 
@@ -91,7 +128,17 @@ def worker(
     config: Path = typer.Option(_default_config_path(), exists=False, help="Path to repos.toml"),
 ) -> None:
     async def runner() -> None:
-        file_config, _, _, state_store, auth, github_client, workflow_service = _build_dependencies(config)
+        (
+            file_config,
+            _,
+            _,
+            state_store,
+            auth,
+            github_client,
+            personal_project_client,
+            workflow_service,
+            _,
+        ) = _build_dependencies(config)
         service = WorkerService(
             state_store=state_store,
             file_config=file_config,
@@ -100,7 +147,7 @@ def worker(
         try:
             await service.run(once=once)
         finally:
-            await _close_clients(auth, github_client)
+            await _close_clients(auth, github_client, personal_project_client)
 
     asyncio.run(runner())
 
@@ -112,7 +159,17 @@ def refresh(
     config: Path = typer.Option(_default_config_path(), exists=False, help="Path to repos.toml"),
 ) -> None:
     async def runner() -> None:
-        file_config, _, _, _, auth, github_client, workflow_service = _build_dependencies(config)
+        (
+            file_config,
+            _,
+            _,
+            _,
+            auth,
+            github_client,
+            personal_project_client,
+            workflow_service,
+            _,
+        ) = _build_dependencies(config)
         repo = next((item for item in file_config.repos if item.owner_repo == owner_repo), None)
         if repo is None:
             raise typer.BadParameter(f"Repo not found in config: {owner_repo}")
@@ -120,7 +177,7 @@ def refresh(
         try:
             await service.run(repo, issue_number)
         finally:
-            await _close_clients(auth, github_client)
+            await _close_clients(auth, github_client, personal_project_client)
 
     asyncio.run(runner())
 
