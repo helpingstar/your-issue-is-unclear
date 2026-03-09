@@ -7,7 +7,7 @@ from pathlib import Path
 from platformdirs import user_log_path, user_state_path
 
 
-APP_NAME = "github-issue-analyzer"
+APP_NAME = "your-issue-is-unclear"
 
 
 @dataclass(frozen=True)

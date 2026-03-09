@@ -18,7 +18,7 @@ from github_issue_analyzer.github.auth import GitHubAppAuth
 from github_issue_analyzer.github.client import GitHubClient
 from github_issue_analyzer.github.personal_project_client import PersonalProjectClient
 from github_issue_analyzer.logging import configure_logging
-from github_issue_analyzer.paths import AppPaths
+from github_issue_analyzer.paths import APP_NAME, AppPaths
 from github_issue_analyzer.services.bootstrap import BootstrapService
 from github_issue_analyzer.services.checkout import CheckoutManager
 from github_issue_analyzer.services.project_metadata import ProjectMetadataService
@@ -224,7 +224,7 @@ def _confirm_selection(console: Console, selection: UiSelection) -> bool:
 
 
 def _build_command_line(command: str, *args: str) -> str:
-    parts = ["github-issue-analyzer", command, *args]
+    parts = [APP_NAME, command, *args]
     return " ".join(shlex.quote(part) for part in parts)
 
 

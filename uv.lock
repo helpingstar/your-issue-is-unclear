@@ -193,7 +193,7 @@ wheels = [
 ]
 
 [[package]]
-name = "github-issue-analyzer"
+name = "your-issue-is-unclear"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

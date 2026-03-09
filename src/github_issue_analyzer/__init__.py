@@ -1,4 +1,4 @@
-"""GitHub Issue Analyzer package."""
+"""your-issue-is-unclear package."""
 
 __all__ = ["__version__"]
 

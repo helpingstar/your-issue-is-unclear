@@ -1,5 +1,5 @@
 [project]
-name = "github-issue-analyzer"
+name = "your-issue-is-unclear"
 version = "0.1.0"
 description = "Local GitHub issue clarification and estimation worker"
 readme = "README.md"
@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-github-issue-analyzer = "github_issue_analyzer.cli:app"
+your-issue-is-unclear = "github_issue_analyzer.cli:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -28,6 +28,9 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/github_issue_analyzer"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

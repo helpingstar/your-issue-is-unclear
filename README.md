@@ -1,8 +1,8 @@
 # your-issue-is-unclear
 
-`your-issue-is-unclear` is the bot display name for this project.
+`your-issue-is-unclear` is the bot display name and CLI name for this project.
 
-GitHub Issue Analyzer is a local Python worker that watches GitHub Issues, asks clarification questions when requirements are unclear, analyzes a local checkout with a pluggable agent backend, and writes the result back to GitHub comments and labels.
+`your-issue-is-unclear` is a local Python worker that watches GitHub Issues, asks clarification questions when requirements are unclear, analyzes a local checkout with a pluggable agent backend, and writes the result back to GitHub comments and labels.
 
 ## Current status
 
@@ -48,19 +48,19 @@ cp config/repos.example.toml config/repos.toml
 4. Run bootstrap.
 
 ```bash
-uv run github-issue-analyzer bootstrap
+uv run your-issue-is-unclear bootstrap
 ```
 
 5. Run one worker iteration.
 
 ```bash
-uv run github-issue-analyzer worker --once
+uv run your-issue-is-unclear worker --once
 ```
 
 Optional: launch the interactive command selector.
 
 ```bash
-uv run github-issue-analyzer ui
+uv run your-issue-is-unclear ui
 ```
 
 ## Environment variables
@@ -87,7 +87,7 @@ uv run github-issue-analyzer ui
 ## CLI
 
 ```bash
-uv run github-issue-analyzer --help
+uv run your-issue-is-unclear --help
 ```
 
 Available commands:
@@ -100,7 +100,7 @@ Available commands:
 Interactive launcher:
 
 ```bash
-uv run github-issue-analyzer ui
+uv run your-issue-is-unclear ui
 ```
 
 The `ui` command opens a menu-driven terminal UI so you can choose:
@@ -121,9 +121,9 @@ After `bootstrap`, the worker also creates the `ai:refresh` label.
 
 ## Config file
 
-The default config file path is [config/repos.toml](/Users/helpingstar/project/github-issue-analyzer/config/repos.toml).
+The default config file path is [config/repos.toml](config/repos.toml).
 
-An example is included at [config/repos.example.toml](/Users/helpingstar/project/github-issue-analyzer/config/repos.example.toml).
+An example is included at [config/repos.example.toml](config/repos.example.toml).
 
 Agent selection settings:
 
