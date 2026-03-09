@@ -31,6 +31,7 @@ class FakePersonalProjectClient:
         self.item_id: str | None = None
         self.create_project_calls: list[str] = []
         self.create_field_calls: list[tuple[str, str]] = []
+        self.link_calls: list[tuple[str, str]] = []
         self.add_calls: list[tuple[str, str]] = []
         self.update_calls: list[tuple[str, str, float]] = []
         self.clear_calls: list[tuple[str, str]] = []
@@ -80,6 +81,9 @@ class FakePersonalProjectClient:
         self.item_id = "ITEM_1"
         return self.item_id
 
+    async def link_repository_to_project_v2(self, project_id: str, repository_id: str) -> None:
+        self.link_calls.append((project_id, repository_id))
+
     async def update_project_v2_number_field(
         self,
         project_id: str,
@@ -102,6 +106,14 @@ def build_repo_config() -> RepoConfig:
     return RepoConfig(
         owner_repo="helpingstar/example",
         project_v2_title="Issue Prioritization",
+        project_v2_impact_field_name="Total Impact",
+        project_v2_create_if_missing=True,
+    )
+
+
+def build_repo_config_with_derived_title() -> RepoConfig:
+    return RepoConfig(
+        owner_repo="helpingstar/example",
         project_v2_impact_field_name="Total Impact",
         project_v2_create_if_missing=True,
     )
@@ -173,3 +185,23 @@ def test_validate_repo_config_requires_pat_for_personal_project_sync() -> None:
 
     with pytest.raises(RuntimeError, match="GIA_GITHUB_PROJECT_TOKEN"):
         asyncio.run(service.validate_repo_config(build_repo_config(), 1))
+
+
+def test_validate_repo_config_uses_derived_project_title_and_links_repository() -> None:
+    personal_client = FakePersonalProjectClient()
+    service = ProjectMetadataService(
+        FakeAppGitHubClient(),  # type: ignore[arg-type]
+        personal_client,  # type: ignore[arg-type]
+    )
+
+    asyncio.run(
+        service.validate_repo_config(
+            build_repo_config_with_derived_title(),
+            1,
+            repository_node_id="REPO_1",
+        )
+    )
+
+    assert personal_client.create_project_calls == ["example_project_issue_prioritization"]
+    assert personal_client.create_field_calls == [("PROJECT_1", "Total Impact")]
+    assert personal_client.link_calls == [("PROJECT_1", "REPO_1")]

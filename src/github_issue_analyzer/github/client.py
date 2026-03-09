@@ -412,6 +412,33 @@ class GitHubClient:
             raise RuntimeError("GitHub Project item was not created")
         return item_id
 
+    async def link_repository_to_project_v2(
+        self,
+        owner: str,
+        repo: str,
+        project_id: str,
+        repository_id: str,
+        installation_id: int | None = None,
+    ) -> None:
+        mutation = """
+        mutation($projectId: ID!, $repositoryId: ID!) {
+          linkProjectV2ToRepository(
+            input: {projectId: $projectId, repositoryId: $repositoryId}
+          ) {
+            repository {
+              id
+            }
+          }
+        }
+        """
+        await self.graphql(
+            owner,
+            repo,
+            mutation,
+            {"projectId": project_id, "repositoryId": repository_id},
+            installation_id=installation_id,
+        )
+
     async def update_project_v2_number_field(
         self,
         owner: str,

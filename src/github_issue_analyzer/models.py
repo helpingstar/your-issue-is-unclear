@@ -36,6 +36,8 @@ class RepoConfig(BaseModel):
     base_branch_override: str | None = None
     agent_backend_override: str | None = None
     agent_model_override: str | None = None
+    agent_role_override: str | None = None
+    agent_language_override: str | None = None
     checkout_path_override: str | None = None
     project_v2_url: str | None = None
     project_v2_title: str | None = None
@@ -59,13 +61,17 @@ class RepoConfig(BaseModel):
             raise ValueError(
                 "project_v2_url and project_v2_title are mutually exclusive"
             )
-        if (has_url or has_title) != has_field_name:
+        if (has_url or has_title) and not has_field_name:
             raise ValueError(
                 "project_v2_impact_field_name must be set together with project_v2_url or project_v2_title"
             )
-        if self.project_v2_create_if_missing and not has_title:
+        if has_field_name and has_url and self.project_v2_create_if_missing:
             raise ValueError(
-                "project_v2_create_if_missing requires project_v2_title"
+                "project_v2_create_if_missing cannot be used with project_v2_url"
+            )
+        if self.project_v2_create_if_missing and not (has_title or (has_field_name and not has_url)):
+            raise ValueError(
+                "project_v2_create_if_missing requires project_v2_title or an implied default title"
             )
         return self
 
@@ -88,7 +94,17 @@ class RepoConfig(BaseModel):
 
     @property
     def project_v2_enabled(self) -> bool:
-        return bool((self.project_v2_url or self.project_v2_title) and self.project_v2_impact_field_name)
+        return bool((self.project_v2_url or self.resolved_project_v2_title) and self.project_v2_impact_field_name)
+
+    @property
+    def resolved_project_v2_title(self) -> str | None:
+        if self.project_v2_url:
+            return None
+        if self.project_v2_title:
+            return self.project_v2_title
+        if not self.project_v2_impact_field_name:
+            return None
+        return f"{self.repo}_project_issue_prioritization"
 
 
 class FileConfig(BaseModel):
@@ -108,6 +124,8 @@ class AppRuntimeSettings(BaseModel):
     default_agent_backend: str = "codex"
     default_agent_model: str | None = None
     default_agent_reasoning_effort: str | None = None
+    default_agent_role: str = "Android developer"
+    default_agent_language: str | None = None
     log_level: str = "INFO"
 
 

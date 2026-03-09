@@ -35,10 +35,22 @@ class ProjectMetadataService:
         self.personal_project_client = personal_project_client
         self._field_cache: dict[tuple[str, str, str], ProjectFieldReference] = {}
 
-    async def validate_repo_config(self, repo: RepoConfig, installation_id: int) -> None:
+    async def validate_repo_config(
+        self,
+        repo: RepoConfig,
+        installation_id: int,
+        repository_node_id: str | None = None,
+    ) -> None:
         if not repo.project_v2_enabled:
             return
-        await self._resolve_project_field(repo, installation_id)
+        reference = await self._resolve_project_field(repo, installation_id)
+        if repository_node_id:
+            await self._ensure_repository_link(
+                repo,
+                reference,
+                repository_node_id,
+                installation_id,
+            )
 
     async def sync_estimate(
         self,
@@ -87,14 +99,14 @@ class ProjectMetadataService:
     ) -> ProjectFieldReference:
         assert repo.project_v2_impact_field_name is not None
 
-        project_key = repo.project_v2_title or repo.project_v2_url
+        project_key = repo.resolved_project_v2_title or repo.project_v2_url
         assert project_key is not None
         cache_key = (repo.owner_repo, project_key, repo.project_v2_impact_field_name)
         cached = self._field_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        if repo.project_v2_title:
+        if repo.resolved_project_v2_title:
             reference = await self._resolve_personal_project_by_title(repo)
             self._field_cache[cache_key] = reference
             return reference
@@ -118,13 +130,14 @@ class ProjectMetadataService:
         return reference
 
     async def _resolve_personal_project_by_title(self, repo: RepoConfig) -> ProjectFieldReference:
-        assert repo.project_v2_title is not None
+        project_title = repo.resolved_project_v2_title
+        assert project_title is not None
         client = self._require_personal_client()
-        project = await client.find_viewer_project_by_title(repo.project_v2_title)
+        project = await client.find_viewer_project_by_title(project_title)
         if project is None:
             if not repo.project_v2_create_if_missing:
-                raise RuntimeError(f"GitHub personal Project '{repo.project_v2_title}' not found")
-            created = await client.create_viewer_project(repo.project_v2_title)
+                raise RuntimeError(f"GitHub personal Project '{project_title}' not found")
+            created = await client.create_viewer_project(project_title)
             viewer = await client.get_viewer()
             project = await client.get_user_project_by_number(viewer["login"], int(created["number"]))
         return await self._ensure_personal_project_field(repo, project)
@@ -212,6 +225,30 @@ class ProjectMetadataService:
                 "GIA_GITHUB_PROJECT_TOKEN is required for personal GitHub Projects sync"
             )
         return self.personal_project_client
+
+    async def _ensure_repository_link(
+        self,
+        repo: RepoConfig,
+        reference: ProjectFieldReference,
+        repository_node_id: str,
+        installation_id: int,
+    ) -> None:
+        try:
+            if reference.transport == "personal":
+                client = self._require_personal_client()
+                await client.link_repository_to_project_v2(reference.project_id, repository_node_id)
+                return
+            await self.github_client.link_repository_to_project_v2(
+                repo.owner,
+                repo.repo,
+                reference.project_id,
+                repository_node_id,
+                installation_id=installation_id,
+            )
+        except RuntimeError as exc:
+            if "already linked" in str(exc).lower():
+                return
+            raise
 
     async def _get_project_item_id(
         self,

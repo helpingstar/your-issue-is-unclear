@@ -146,3 +146,29 @@ def test_codex_adapter_omits_model_flag_when_unset(monkeypatch, tmp_path: Path) 
     assert response.status == "error"
     assert captured_args
     assert "-m" not in captured_args[0]
+
+
+def test_codex_adapter_includes_output_language_in_prompt(tmp_path: Path) -> None:
+    adapter = CodexAdapter(command="codex", language="Korean")
+
+    prompt = adapter._build_prompt(build_request(tmp_path))
+
+    assert "Output language:" in prompt
+    assert "Korean" in prompt
+    assert "Write all human-readable strings in the requested output language." in prompt
+
+
+def test_codex_adapter_includes_explicit_role_in_prompt(tmp_path: Path) -> None:
+    adapter = CodexAdapter(command="codex", role="iOS developer")
+
+    prompt = adapter._build_prompt(build_request(tmp_path))
+
+    assert "Adopt this engineer profile while analyzing the issue and repository: iOS developer." in prompt
+
+
+def test_codex_adapter_defaults_role_to_android_developer(tmp_path: Path) -> None:
+    adapter = CodexAdapter(command="codex")
+
+    prompt = adapter._build_prompt(build_request(tmp_path))
+
+    assert "Adopt this engineer profile while analyzing the issue and repository: Android developer." in prompt

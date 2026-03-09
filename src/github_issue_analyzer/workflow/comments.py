@@ -45,6 +45,37 @@ def _render_agent_settings_lines(model: str | None, reasoning_effort: str | None
     ]
 
 
+def _render_clarification_answer_lines(answers: list[ClarificationAnswer]) -> list[str]:
+    lines: list[str] = []
+    for answer in answers:
+        if answer.free_text:
+            value = answer.free_text
+        else:
+            value = ", ".join(answer.selected_options)
+        lines.append(f"- {answer.prompt}: {value}")
+    return lines or ["- (정리된 요구사항 없음)"]
+
+
+def _render_requirement_snapshot_lines(
+    issue_title: str,
+    issue_body: str,
+    answers: list[ClarificationAnswer],
+) -> list[str]:
+    body_lines = issue_body.splitlines() if issue_body.strip() else ["(본문 없음)"]
+    return [
+        "요구사항 정리:",
+        "````text",
+        "[원본 이슈]",
+        f"제목: {issue_title}",
+        "본문:",
+        *body_lines,
+        "",
+        "[clarification 답변]",
+        *_render_clarification_answer_lines(answers),
+        "````",
+    ]
+
+
 def render_clarification_comment(
     missing_slots: list[str],
     question_specs: list[QuestionSpec],
@@ -93,17 +124,29 @@ def render_clarification_comment(
 
 
 def render_estimate_comment(
+    issue_title: str,
+    issue_body: str,
     base_branch: str,
     estimate: EstimateResult,
     *,
     model: str | None = None,
     reasoning_effort: str | None = None,
+    clarification_answers: list[ClarificationAnswer] | None = None,
 ) -> str:
     now = datetime.now(UTC).isoformat()
+    clarification_block: list[str] = []
+    if clarification_answers:
+        clarification_block = _render_requirement_snapshot_lines(
+            issue_title,
+            issue_body,
+            clarification_answers,
+        )
     return "\n".join(
         [
             f"[{BOT_NAME}]",
             "",
+            *clarification_block,
+            *([""] if clarification_block else []),
             f"- 분석 시각: `{now}`",
             *_render_agent_settings_lines(model, reasoning_effort),
             f"- 기준 브랜치: `{base_branch}`",
@@ -126,28 +169,20 @@ def render_estimate_comment(
 
 
 def render_clarification_summary_comment(
+    issue_title: str,
+    issue_body: str,
     answers: list[ClarificationAnswer],
     *,
     model: str | None = None,
     reasoning_effort: str | None = None,
 ) -> str:
-    summary_lines = []
-    for answer in answers:
-        if answer.free_text:
-            value = answer.free_text
-        else:
-            value = ", ".join(answer.selected_options)
-        summary_lines.append(f"- {answer.prompt}: {value}")
-
     return "\n".join(
         [
             f"[{BOT_NAME}]",
             "",
             *_render_agent_settings_lines(model, reasoning_effort),
             "clarification이 완료되어 현재까지 확인된 요구사항을 정리했습니다.",
-            "```text",
-            *(summary_lines or ["- (정리된 요구사항 없음)"]),
-            "```",
+            *_render_requirement_snapshot_lines(issue_title, issue_body, answers),
         ]
     )
 

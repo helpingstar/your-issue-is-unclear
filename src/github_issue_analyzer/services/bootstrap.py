@@ -50,7 +50,11 @@ class BootstrapService:
         token = await self.github_client.auth.get_installation_token(installation_id)
         await self.checkout_manager.ensure_checkout(repo.owner_repo, checkout_path, default_branch, token)
         await self._ensure_labels(repo, installation_id)
-        await self.project_metadata_service.validate_repo_config(repo, installation_id)
+        await self.project_metadata_service.validate_repo_config(
+            repo,
+            installation_id,
+            repository_node_id=repo_data.get("node_id"),
+        )
 
         self.state_store.sync_repo_registration(
             repo=repo,

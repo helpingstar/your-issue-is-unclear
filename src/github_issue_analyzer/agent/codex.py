@@ -18,10 +18,14 @@ class CodexAdapter(AgentAdapter):
         command: str = "codex",
         model: str | None = None,
         reasoning_effort: str | None = None,
+        role: str | None = None,
+        language: str | None = None,
     ) -> None:
         self.command = command
         self.model = model.strip() if model else None
         self.reasoning_effort = reasoning_effort.strip() if reasoning_effort else None
+        self.role = role.strip() if role and role.strip() else "Android developer"
+        self.language = language.strip() if language else None
 
     async def analyze(
         self, request: AgentRequest, *, clarification_timeout: int, estimate_timeout: int
@@ -138,7 +142,8 @@ class CodexAdapter(AgentAdapter):
             f"- {line}" for line in request.clarification_answers
         )
         return f"""
-You are the backend analysis agent for {BOT_NAME}.
+You are serving as the repository analysis agent for {BOT_NAME}.
+Adopt this engineer profile while analyzing the issue and repository: {self.role}.
 
 Read the local repository in a strictly read-only way.
 Do not modify files.
@@ -160,6 +165,13 @@ Accepted comments:
 
 Clarification answers:
 {clarification_answers or "(none)"}
+
+Output language:
+{self.language or "(default)"}
+
+Write all human-readable strings in the requested output language.
+This includes clarification question prompts, options, option descriptions, estimate reasons, and error messages.
+Do not translate file paths, branch names, repository names, issue numbers, or commit SHAs.
 
 Return JSON only and follow the provided schema exactly.
 """.strip()

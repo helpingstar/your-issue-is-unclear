@@ -57,6 +57,8 @@ def load_runtime_settings() -> AppRuntimeSettings:
         "default_agent_backend": os.getenv("GIA_DEFAULT_AGENT_BACKEND", "codex"),
         "default_agent_model": os.getenv("GIA_DEFAULT_AGENT_MODEL"),
         "default_agent_reasoning_effort": os.getenv("GIA_DEFAULT_AGENT_REASONING_EFFORT"),
+        "default_agent_role": os.getenv("GIA_DEFAULT_AGENT_ROLE", "Android developer"),
+        "default_agent_language": os.getenv("GIA_DEFAULT_AGENT_LANGUAGE"),
         "log_level": os.getenv("GIA_LOG_LEVEL", "INFO"),
     }
     try:

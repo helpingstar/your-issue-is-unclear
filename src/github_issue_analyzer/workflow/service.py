@@ -195,9 +195,12 @@ class WorkflowService:
         clarification_lines: list[str] = []
         active_session = self.state_store.get_active_clarification_session(repo.owner_repo, issue_number)
         clarification_answer_sources: list[dict] = []
+        clarification_answers = []
         backend = repo.agent_backend_override or self.runtime_settings.default_agent_backend
         model = repo.agent_model_override or self.runtime_settings.default_agent_model
         reasoning_effort = self.runtime_settings.default_agent_reasoning_effort
+        role = repo.agent_role_override or self.runtime_settings.default_agent_role
+        language = repo.agent_language_override or self.runtime_settings.default_agent_language
         if active_session:
             clarification = await self._parse_active_clarification(
                 repo, issue_number, active_session, comments, registration.app_installation_id, allowed_logins
@@ -226,9 +229,12 @@ class WorkflowService:
                 )
                 return
             clarification_lines = clarification.as_prompt_lines()
+            clarification_answers = clarification.answers
             clarification_answer_sources = await self._sync_clarification_summary_comment(
                 repo,
                 issue_number,
+                issue["title"],
+                issue_body,
                 active_session,
                 clarification,
                 registration.app_installation_id,
@@ -240,6 +246,8 @@ class WorkflowService:
             backend,
             model=model,
             reasoning_effort=reasoning_effort,
+            role=role,
+            language=language,
         )
         request = AgentRequest(
             owner_repo=repo.owner_repo,
@@ -319,6 +327,8 @@ class WorkflowService:
                 model,
                 reasoning_effort,
                 clarification_answer_sources,
+                clarification_answers,
+                issue_body,
             )
 
     async def process_stale_candidates(self, repo: RepoConfig) -> None:
@@ -445,6 +455,8 @@ class WorkflowService:
         model: str | None,
         reasoning_effort: str | None,
         clarification_answer_sources: list[dict],
+        clarification_answers: list,
+        issue_body: str,
     ) -> None:
         assert response.estimate is not None
         self.state_store.resolve_clarification_session(
@@ -474,10 +486,13 @@ class WorkflowService:
             repo.repo,
             issue_number,
             render_estimate_comment(
+                issue["title"],
+                issue_body,
                 base_branch,
                 response.estimate,
                 model=model,
                 reasoning_effort=reasoning_effort,
+                clarification_answers=clarification_answers,
             ),
             installation_id=installation_id,
         )
@@ -535,6 +550,8 @@ class WorkflowService:
         self,
         repo: RepoConfig,
         issue_number: int,
+        issue_title: str,
+        issue_body: str,
         session: ClarificationSessionORM,
         clarification,
         installation_id: int,
@@ -543,6 +560,8 @@ class WorkflowService:
     ) -> list[dict]:
         summary_comment_id = self._clarification_summary_comment_id(session.answer_sources)
         body = render_clarification_summary_comment(
+            issue_title,
+            issue_body,
             clarification.answers,
             model=model,
             reasoning_effort=reasoning_effort,

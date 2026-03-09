@@ -74,6 +74,8 @@ uv run github-issue-analyzer worker --once
 - `GIA_DEFAULT_AGENT_BACKEND` (optional)
 - `GIA_DEFAULT_AGENT_MODEL` (optional)
 - `GIA_DEFAULT_AGENT_REASONING_EFFORT` (optional)
+- `GIA_DEFAULT_AGENT_ROLE` (optional)
+- `GIA_DEFAULT_AGENT_LANGUAGE` (optional)
 - `GIA_LOG_LEVEL` (optional)
 
 ## CLI
@@ -99,8 +101,12 @@ Agent selection settings:
 - `GIA_DEFAULT_AGENT_BACKEND` sets the global backend default
 - `GIA_DEFAULT_AGENT_MODEL` sets the global model passed to the agent CLI
 - `GIA_DEFAULT_AGENT_REASONING_EFFORT` sets the global reasoning effort passed to the agent CLI
+- `GIA_DEFAULT_AGENT_ROLE` sets the agent persona used in the prompt, defaulting to `Android developer`
+- `GIA_DEFAULT_AGENT_LANGUAGE` sets the language for model-generated text such as reasons and clarification prompts
 - `agent_backend_override` overrides the backend for one repo
 - `agent_model_override` overrides the model for one repo
+- `agent_role_override` overrides the prompt persona for one repo
+- `agent_language_override` overrides the language for one repo
 
 If no model or reasoning effort is configured here, the worker falls back to the Codex CLI defaults from `~/.codex/config.toml`.
 
@@ -108,14 +114,16 @@ If no model or reasoning effort is configured here, the worker falls back to the
 
 If you want GitHub Projects v2 sync, add these fields to a repo entry:
 
-- `project_v2_title`
 - `project_v2_impact_field_name`
 - `project_v2_create_if_missing`
 
+`project_v2_title` is optional. If you omit it, the worker derives `<repo>_project_issue_prioritization`.
+
 With `GIA_GITHUB_PROJECT_TOKEN`, the worker uses your personal token for Projects only:
 
-- it finds a personal Project by `project_v2_title`
+- it finds a personal Project by `project_v2_title` or the derived default title
 - if `project_v2_create_if_missing = true`, it creates the Project when missing
+- it links the repository to the Project during bootstrap
 - it creates the `Number` field when missing
 - it writes a single representative total-impact value using the midpoint of the estimated range
 
