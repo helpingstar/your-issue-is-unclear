@@ -57,6 +57,12 @@ uv run github-issue-analyzer bootstrap
 uv run github-issue-analyzer worker --once
 ```
 
+Optional: launch the interactive command selector.
+
+```bash
+uv run github-issue-analyzer ui
+```
+
 ## Environment variables
 
 - `GIA_GITHUB_APP_ID`
@@ -89,6 +95,21 @@ Available commands:
 - `bootstrap`
 - `worker`
 - `refresh`
+- `ui`
+
+Interactive launcher:
+
+```bash
+uv run github-issue-analyzer ui
+```
+
+The `ui` command opens a menu-driven terminal UI so you can choose:
+
+- `bootstrap` with all enabled repos or one enabled repo
+- `worker` with `--once` or `--no-once`
+- `refresh` with a configured repo and issue number
+
+Before execution, it shows a summary and the equivalent CLI command and asks for confirmation.
 
 ## Manual refresh
 
