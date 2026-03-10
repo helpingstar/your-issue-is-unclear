@@ -58,7 +58,6 @@ class WorkerService:
             await self.workflow_service.process_issue(repo, issue["number"])
 
         await self.workflow_service.process_stale_candidates(repo)
-        await self.workflow_service.sync_priority_index_candidates(repo)
         self.state_store.touch_repo_poll(repo.owner_repo)
 
     async def _poll_active_clarifications(self) -> None:

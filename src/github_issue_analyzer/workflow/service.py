@@ -36,7 +36,6 @@ from github_issue_analyzer.workflow.comments import (
     render_error_comment,
     render_estimate_comment,
     render_requirements_changed_comment,
-    render_stale_comment,
 )
 
 
@@ -378,8 +377,7 @@ class WorkflowService:
             changed_files = await self.checkout_manager.changed_files_since(
                 checkout_path, issue_record.base_commit_sha
             )
-            matched_files = sorted(set(snapshot.candidate_files).intersection(changed_files))
-            if not matched_files:
+            if not set(snapshot.candidate_files).intersection(changed_files):
                 continue
 
             if issue_record.workflow_state != WorkflowState.STALE.value:
@@ -390,64 +388,17 @@ class WorkflowService:
                         WorkflowState.STALE,
                         registration.app_installation_id,
                     )
-                    await self.github_client.create_issue_comment(
-                        repo.owner,
-                        repo.repo,
-                        issue_record.issue_number,
-                        render_stale_comment(issue_record.base_commit_sha, current_head, matched_files),
-                        installation_id=registration.app_installation_id,
-                    )
-                    stale_issue = await self.github_client.get_issue(
-                        repo.owner,
-                        repo.repo,
-                        issue_record.issue_number,
-                        installation_id=registration.app_installation_id,
-                    )
                 except httpx.HTTPStatusError as exc:
                     if self._is_resource_unavailable(exc):
                         self._mark_issue_unavailable(repo, issue_record.issue_number, exc.response.status_code)
                         continue
                     raise
 
-                await self._clear_project_estimate(repo, stale_issue, registration.app_installation_id)
                 self.state_store.update_issue_record(
                     repo.owner_repo,
                     issue_record.issue_number,
                     workflow_state=WorkflowState.STALE.value,
                 )
-
-    async def sync_priority_index_candidates(self, repo: RepoConfig) -> None:
-        if not repo.project_v2_priority_index_enabled:
-            return
-        registration = self.state_store.get_repo_registration(repo.owner_repo)
-        if registration is None or registration.app_installation_id is None:
-            return
-
-        for issue_record in self.state_store.list_estimated_issue_records(repo.owner_repo):
-            snapshot = self.state_store.get_latest_estimate(repo.owner_repo, issue_record.issue_number)
-            if snapshot is None:
-                continue
-            try:
-                issue = await self.github_client.get_issue(
-                    repo.owner,
-                    repo.repo,
-                    issue_record.issue_number,
-                    installation_id=registration.app_installation_id,
-                )
-            except httpx.HTTPStatusError as exc:
-                if self._is_resource_unavailable(exc):
-                    self._mark_issue_unavailable(repo, issue_record.issue_number, exc.response.status_code)
-                    continue
-                raise
-            await self._sync_project_priority_index(
-                repo,
-                issue,
-                registration.app_installation_id,
-                self._representative_total_impact(
-                    snapshot.lines_total_min,
-                    snapshot.lines_total_max,
-                ),
-            )
 
     async def _handle_needs_clarification(
         self,
@@ -808,28 +759,6 @@ class WorkflowService:
                 exc_info=True,
             )
 
-    async def _sync_project_priority_index(
-        self,
-        repo: RepoConfig,
-        issue: dict,
-        installation_id: int,
-        total_impact: float,
-    ) -> None:
-        try:
-            await self.project_metadata_service.sync_priority_index(
-                repo,
-                issue,
-                installation_id,
-                total_impact,
-            )
-        except Exception:
-            logger.warning(
-                "failed to sync GitHub Project priority index for %s#%s",
-                repo.owner_repo,
-                issue["number"],
-                exc_info=True,
-            )
-
     async def _clear_project_estimate(
         self,
         repo: RepoConfig,
@@ -848,9 +777,6 @@ class WorkflowService:
 
     def _is_resource_unavailable(self, exc: httpx.HTTPStatusError) -> bool:
         return exc.response.status_code in (404, 410)
-
-    def _representative_total_impact(self, minimum: int, maximum: int) -> float:
-        return float((minimum + maximum + 1) // 2)
 
     def _mark_issue_unavailable(self, repo: RepoConfig, issue_number: int, status_code: int) -> None:
         logger.warning(

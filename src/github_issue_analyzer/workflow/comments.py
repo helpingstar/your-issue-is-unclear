@@ -194,21 +194,6 @@ def render_clarification_summary_comment(
     )
 
 
-def render_stale_comment(previous_commit: str, current_commit: str, matched_files: list[str]) -> str:
-    lines = [
-        f"[{BOT_NAME}]",
-        "",
-        "이전 추정이 stale 상태로 전환되었습니다.",
-        f"- 이전 기준 커밋: `{previous_commit}`",
-        f"- 현재 기준 커밋: `{current_commit}`",
-        "- 겹친 파일:",
-        *[f"  - `{path}`" for path in matched_files],
-        "",
-        f"`{REFRESH_LABEL}` 라벨 또는 `/refresh` 로 전체 재평가를 다시 실행할 수 있습니다.",
-    ]
-    return "\n".join(lines)
-
-
 def render_requirements_changed_comment() -> str:
     return "\n".join(
         [

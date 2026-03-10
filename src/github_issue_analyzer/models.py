@@ -28,7 +28,6 @@ class RepoDefaults(BaseModel):
     polling_interval_seconds: int = 30
     project_v2_impact_field_name: str | None = None
     project_v2_priority_field_name: str | None = None
-    project_v2_priority_index_field_name: str | None = None
     project_v2_create_if_missing: bool = False
 
 
@@ -47,7 +46,6 @@ class RepoConfig(BaseModel):
     project_v2_title: str | None = None
     project_v2_impact_field_name: str | None = None
     project_v2_priority_field_name: str | None = None
-    project_v2_priority_index_field_name: str | None = None
     project_v2_create_if_missing: bool | None = None
     enabled: bool = True
 
@@ -64,7 +62,6 @@ class RepoConfig(BaseModel):
         has_title = bool(self.project_v2_title)
         has_field_name = bool(self.project_v2_impact_field_name)
         has_priority_field_name = bool(self.project_v2_priority_field_name)
-        has_priority_index_field_name = bool(self.project_v2_priority_index_field_name)
         if has_url and has_title:
             raise ValueError(
                 "project_v2_url and project_v2_title are mutually exclusive"
@@ -81,14 +78,9 @@ class RepoConfig(BaseModel):
             raise ValueError(
                 "project_v2_create_if_missing requires project_v2_title or an implied default title"
             )
-        if (has_priority_field_name or has_priority_index_field_name) and not has_field_name:
+        if has_priority_field_name and not has_field_name:
             raise ValueError(
-                "project_v2_priority_field_name and project_v2_priority_index_field_name "
-                "require project_v2_impact_field_name"
-            )
-        if has_priority_index_field_name and not has_priority_field_name:
-            raise ValueError(
-                "project_v2_priority_index_field_name requires project_v2_priority_field_name"
+                "project_v2_priority_field_name requires project_v2_impact_field_name"
             )
         return self
 
@@ -112,14 +104,6 @@ class RepoConfig(BaseModel):
     @property
     def project_v2_enabled(self) -> bool:
         return bool((self.project_v2_url or self.resolved_project_v2_title) and self.project_v2_impact_field_name)
-
-    @property
-    def project_v2_priority_index_enabled(self) -> bool:
-        return bool(
-            self.project_v2_enabled
-            and self.project_v2_priority_field_name
-            and self.project_v2_priority_index_field_name
-        )
 
     @property
     def resolved_project_v2_title(self) -> str | None:
@@ -149,7 +133,6 @@ class FileConfig(BaseModel):
 
         impact_field_name = defaults.get("project_v2_impact_field_name")
         priority_field_name = defaults.get("project_v2_priority_field_name")
-        priority_index_field_name = defaults.get("project_v2_priority_index_field_name")
         create_if_missing = defaults.get("project_v2_create_if_missing")
         merged_repos = []
 
@@ -169,11 +152,6 @@ class FileConfig(BaseModel):
                 and priority_field_name is not None
             ):
                 merged_repo["project_v2_priority_field_name"] = priority_field_name
-            if (
-                merged_repo.get("project_v2_priority_index_field_name") is None
-                and priority_index_field_name is not None
-            ):
-                merged_repo["project_v2_priority_index_field_name"] = priority_index_field_name
             if "project_v2_create_if_missing" not in merged_repo and create_if_missing is not None:
                 merged_repo["project_v2_create_if_missing"] = create_if_missing
             merged_repos.append(merged_repo)

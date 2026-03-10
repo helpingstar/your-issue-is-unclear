@@ -145,7 +145,7 @@ Agent selection settings:
 - `agent_role_override` overrides the prompt persona for one repo
 - `agent_language_override` overrides the language for one repo
 - `project_v2_impact_field_name` and `project_v2_create_if_missing` can be set under `[defaults]` and inherited by each repo
-- `project_v2_priority_field_name` and `project_v2_priority_index_field_name` can also be set under `[defaults]`
+- `project_v2_priority_field_name` can also be set under `[defaults]`
 
 If no model or reasoning effort is configured here, the worker falls back to the Codex CLI defaults from `~/.codex/config.toml`.
 
@@ -155,7 +155,6 @@ If you want GitHub Projects v2 sync, add these fields to a repo entry:
 
 - `project_v2_impact_field_name`
 - `project_v2_priority_field_name` (optional)
-- `project_v2_priority_index_field_name` (optional)
 - `project_v2_create_if_missing`
 
 If those values are the same for all repositories, you can put them under `[defaults]` instead.
@@ -170,8 +169,7 @@ With `GIA_GITHUB_PROJECT_TOKEN`, the worker uses your personal token for Project
 - it creates the configured `Number` fields when missing
 - it writes a single representative total-impact value using the midpoint of the estimated range
 - if `project_v2_priority_field_name` is configured, it creates that `Number` field so you can manage priority manually in GitHub Projects
-- if both `project_v2_priority_field_name` and `project_v2_priority_index_field_name` are configured, it reads `Priority`, writes `PriorityIndex = Priority * Total Impact`, and keeps `PriorityIndex` synced for open estimated issues
-- if you prefer a native GitHub formula column, set only `project_v2_priority_field_name` here and create the formula column yourself in the Project UI
+- if you prefer a native GitHub formula or derived column, create it directly in the Project UI; the worker only writes `Total Impact`
 
 Example:
 

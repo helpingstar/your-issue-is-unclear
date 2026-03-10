@@ -34,7 +34,6 @@ def test_load_file_config_applies_project_v2_defaults(tmp_path: Path) -> None:
 [defaults]
 project_v2_impact_field_name = "Total Impact"
 project_v2_priority_field_name = "Priority"
-project_v2_priority_index_field_name = "PriorityIndex"
 project_v2_create_if_missing = true
 
 [[repos]]
@@ -47,15 +46,12 @@ owner_repo = "helpingstar/example"
 
     assert config.defaults.project_v2_impact_field_name == "Total Impact"
     assert config.defaults.project_v2_priority_field_name == "Priority"
-    assert config.defaults.project_v2_priority_index_field_name == "PriorityIndex"
     assert config.defaults.project_v2_create_if_missing is True
     assert config.repos[0].project_v2_impact_field_name == "Total Impact"
     assert config.repos[0].project_v2_priority_field_name == "Priority"
-    assert config.repos[0].project_v2_priority_index_field_name == "PriorityIndex"
     assert config.repos[0].project_v2_create_if_missing is True
     assert config.repos[0].resolved_project_v2_title == "example_project_issue_prioritization"
     assert config.repos[0].project_v2_enabled is True
-    assert config.repos[0].project_v2_priority_index_enabled is True
 
 
 def test_load_file_config_reads_project_v2_settings(tmp_path: Path) -> None:
@@ -67,7 +63,6 @@ owner_repo = "helpingstar/example"
 project_v2_title = "Issue Prioritization"
 project_v2_impact_field_name = "Total Impact"
 project_v2_priority_field_name = "Priority"
-project_v2_priority_index_field_name = "PriorityIndex"
 project_v2_create_if_missing = true
 """.strip(),
         encoding="utf-8",
@@ -78,7 +73,6 @@ project_v2_create_if_missing = true
     assert config.repos[0].project_v2_title == "Issue Prioritization"
     assert config.repos[0].project_v2_impact_field_name == "Total Impact"
     assert config.repos[0].project_v2_priority_field_name == "Priority"
-    assert config.repos[0].project_v2_priority_index_field_name == "PriorityIndex"
     assert config.repos[0].project_v2_create_if_missing is True
 
 
@@ -108,7 +102,6 @@ def test_load_file_config_allows_overriding_default_project_v2_create_if_missing
 [defaults]
 project_v2_impact_field_name = "Total Impact"
 project_v2_priority_field_name = "Priority"
-project_v2_priority_index_field_name = "PriorityIndex"
 project_v2_create_if_missing = true
 
 [[repos]]
@@ -123,7 +116,6 @@ project_v2_create_if_missing = false
 
     assert config.repos[0].project_v2_impact_field_name == "Total Impact"
     assert config.repos[0].project_v2_priority_field_name == "Priority"
-    assert config.repos[0].project_v2_priority_index_field_name == "PriorityIndex"
     assert config.repos[0].project_v2_create_if_missing is False
 
 
@@ -202,14 +194,28 @@ def test_repo_config_rejects_priority_fields_without_impact_field() -> None:
         )
 
 
-def test_repo_config_rejects_priority_index_without_priority_field() -> None:
-    with pytest.raises(ValueError):
-        RepoConfig(
-            owner_repo="helpingstar/example",
-            project_v2_title="Issue Prioritization",
-            project_v2_impact_field_name="Total Impact",
-            project_v2_priority_index_field_name="PriorityIndex",
-        )
+def test_load_file_config_ignores_legacy_priority_index_setting(tmp_path: Path) -> None:
+    config_path = tmp_path / "repos.toml"
+    config_path.write_text(
+        """
+[defaults]
+project_v2_impact_field_name = "Total Impact"
+project_v2_priority_field_name = "Priority"
+project_v2_priority_index_field_name = "PriorityIndex"
+
+[[repos]]
+owner_repo = "helpingstar/example"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_file_config(config_path)
+
+    assert config.defaults.project_v2_impact_field_name == "Total Impact"
+    assert config.defaults.project_v2_priority_field_name == "Priority"
+    assert not hasattr(config.defaults, "project_v2_priority_index_field_name")
+    assert config.repos[0].project_v2_priority_field_name == "Priority"
+    assert not hasattr(config.repos[0], "project_v2_priority_index_field_name")
 
 
 def test_load_configuration_reads_project_dotenv(tmp_path: Path, monkeypatch) -> None:

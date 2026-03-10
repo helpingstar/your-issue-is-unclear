@@ -6,7 +6,6 @@ from github_issue_analyzer.workflow.comments import (
     render_error_comment,
     render_estimate_comment,
     render_requirements_changed_comment,
-    render_stale_comment,
 )
 
 
@@ -190,12 +189,6 @@ def test_render_error_comment_uses_codex_defaults_when_settings_missing() -> Non
 
     assert "- 모델: `(codex default)`" in body
     assert "- reasoning_effort: `(codex default)`" in body
-
-
-def test_render_stale_comment_mentions_refresh_label() -> None:
-    body = render_stale_comment("old", "new", ["src/app.py"])
-
-    assert REFRESH_LABEL in body
 
 
 def test_render_requirements_changed_comment_mentions_refresh_label() -> None:

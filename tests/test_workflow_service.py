@@ -63,22 +63,12 @@ class FakeProjectMetadataService:
     def __init__(self) -> None:
         self.clear_calls: list[int] = []
         self.sync_calls: list[int] = []
-        self.priority_index_calls: list[tuple[int, float]] = []
 
     async def clear_estimate(self, repo: RepoConfig, issue: dict, installation_id: int) -> None:
         self.clear_calls.append(issue["number"])
 
     async def sync_estimate(self, repo: RepoConfig, issue: dict, installation_id: int, estimate) -> None:
         self.sync_calls.append(issue["number"])
-
-    async def sync_priority_index(
-        self,
-        repo: RepoConfig,
-        issue: dict,
-        installation_id: int,
-        total_impact: float,
-    ) -> None:
-        self.priority_index_calls.append((issue["number"], total_impact))
 
 
 class FakeRefreshGitHubClient:
@@ -306,6 +296,78 @@ def test_process_stale_candidates_skips_gone_issue(tmp_path: Path) -> None:
     assert project_metadata_service.clear_calls == []
 
 
+def test_process_stale_candidates_sets_label_without_comment_or_project_clear(tmp_path: Path) -> None:
+    db_path = tmp_path / "analyzer.db"
+    state_store = StateStore(db_path)
+    state_store.create_all()
+
+    repo = RepoConfig(owner_repo="helpingstar/example")
+    file_config = FileConfig()
+    checkout_root = tmp_path / "checkouts"
+    checkout_root.mkdir()
+    state_store.sync_repo_registration(
+        repo,
+        file_config.defaults,
+        checkout_root / "helpingstar" / "example",
+        app_installation_id=1,
+    )
+    state_store.update_issue_record(
+        repo.owner_repo,
+        5,
+        issue_state="open",
+        workflow_state=WorkflowState.ESTIMATED.value,
+        base_commit_sha="oldhead",
+    )
+    state_store.create_estimate_snapshot(
+        repo.owner_repo,
+        5,
+        {
+            "base_commit_sha": "oldhead",
+            "lines_added_min": 1,
+            "lines_added_max": 2,
+            "lines_modified_min": 3,
+            "lines_modified_max": 4,
+            "lines_deleted_min": 0,
+            "lines_deleted_max": 1,
+            "lines_total_min": 4,
+            "lines_total_max": 7,
+            "candidate_files": ["src/app.py"],
+            "reasons": ["Touches workflow"],
+        },
+    )
+
+    github_client = FakeRefreshGitHubClient()
+    github_client.issue_labels = {"ai:estimated"}
+    project_metadata_service = FakeProjectMetadataService()
+    service = WorkflowService(
+        github_client=github_client,  # type: ignore[arg-type]
+        state_store=state_store,
+        checkout_manager=FakeCheckoutManager(),  # type: ignore[arg-type]
+        file_config=file_config,
+        paths=AppPaths(
+            project_root=tmp_path,
+            config_file=tmp_path / "repos.toml",
+            state_dir=tmp_path,
+            db_path=db_path,
+            checkout_root=checkout_root,
+            log_root=tmp_path / "logs",
+        ),
+        runtime_settings=SimpleNamespace(active_clarification_polling_seconds=10),
+        agent_factory=lambda *args, **kwargs: None,
+        project_metadata_service=project_metadata_service,  # type: ignore[arg-type]
+    )
+
+    asyncio.run(service.process_stale_candidates(repo))
+
+    record = state_store.get_or_create_issue_record(repo.owner_repo, 5)
+    assert record.workflow_state == WorkflowState.STALE.value
+    assert github_client.comments == []
+    assert "ai:stale" in github_client.issue_labels
+    assert "ai:stale" in github_client.added_labels
+    assert "ai:estimated" in github_client.removed_labels
+    assert project_metadata_service.clear_calls == []
+
+
 def test_process_issue_refresh_label_reanalyzes_stopped_issue(tmp_path: Path) -> None:
     db_path = tmp_path / "analyzer.db"
     state_store = StateStore(db_path)
@@ -424,87 +486,6 @@ def test_process_issue_does_not_reestimate_unchanged_estimated_issue(tmp_path: P
     assert record.workflow_state == WorkflowState.ESTIMATED.value
     assert len(github_client.comments) == 1
     assert project_metadata_service.sync_calls == [7]
-
-
-def test_sync_priority_index_candidates_updates_estimated_issues(tmp_path: Path) -> None:
-    db_path = tmp_path / "analyzer.db"
-    state_store = StateStore(db_path)
-    state_store.create_all()
-
-    repo = RepoConfig(
-        owner_repo="helpingstar/example",
-        project_v2_title="Issue Prioritization",
-        project_v2_impact_field_name="Total Impact",
-        project_v2_priority_field_name="Priority",
-        project_v2_priority_index_field_name="PriorityIndex",
-        project_v2_create_if_missing=True,
-    )
-    file_config = FileConfig()
-    checkout_root = tmp_path / "checkouts"
-    checkout_root.mkdir()
-    state_store.sync_repo_registration(
-        repo,
-        file_config.defaults,
-        checkout_root / "helpingstar" / "example",
-        app_installation_id=1,
-    )
-    state_store.update_issue_record(
-        repo.owner_repo,
-        7,
-        issue_state="open",
-        workflow_state=WorkflowState.ESTIMATED.value,
-    )
-    state_store.create_estimate_snapshot(
-        repo.owner_repo,
-        7,
-        {
-            "base_commit_sha": "headsha",
-            "lines_added_min": 1,
-            "lines_added_max": 2,
-            "lines_modified_min": 0,
-            "lines_modified_max": 1,
-            "lines_deleted_min": 0,
-            "lines_deleted_max": 0,
-            "lines_total_min": 1,
-            "lines_total_max": 3,
-            "candidate_files": ["src/app.py"],
-            "reasons": ["Refresh label requested reevaluation"],
-        },
-    )
-
-    github_client = FakeRefreshGitHubClient()
-    project_metadata_service = FakeProjectMetadataService()
-    service = WorkflowService(
-        github_client=github_client,  # type: ignore[arg-type]
-        state_store=state_store,
-        checkout_manager=FakeCheckoutManager(),  # type: ignore[arg-type]
-        file_config=file_config,
-        paths=AppPaths(
-            project_root=tmp_path,
-            config_file=tmp_path / "repos.toml",
-            state_dir=tmp_path,
-            db_path=db_path,
-            checkout_root=checkout_root,
-            log_root=tmp_path / "logs",
-        ),
-        runtime_settings=SimpleNamespace(
-            active_clarification_polling_seconds=10,
-            clarification_timeout_seconds=300,
-            estimate_timeout_seconds=300,
-            default_agent_backend="codex",
-            default_agent_model=None,
-            default_agent_reasoning_effort=None,
-            default_agent_role="Android developer",
-            default_agent_language=None,
-        ),
-        agent_factory=lambda *args, **kwargs: None,
-        project_metadata_service=project_metadata_service,  # type: ignore[arg-type]
-    )
-
-    asyncio.run(service.sync_priority_index_candidates(repo))
-
-    assert project_metadata_service.priority_index_calls == [(7, 2.0)]
-
 
 def test_process_issue_recovers_when_clarification_comment_is_missing(tmp_path: Path) -> None:
     db_path = tmp_path / "analyzer.db"

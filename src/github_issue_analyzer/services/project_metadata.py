@@ -22,7 +22,6 @@ class ProjectFieldReference:
 class ProjectFieldBundle:
     impact: ProjectFieldReference
     priority: ProjectFieldReference | None = None
-    priority_index: ProjectFieldReference | None = None
 
 
 @dataclass(frozen=True)
@@ -85,13 +84,6 @@ class ProjectMetadataService:
             total_impact,
             installation_id,
         )
-        await self._sync_priority_index_for_item(
-            repo,
-            reference,
-            item_id,
-            total_impact,
-            installation_id,
-        )
 
     async def clear_estimate(self, repo: RepoConfig, issue: dict, installation_id: int) -> None:
         if not repo.project_v2_enabled:
@@ -106,33 +98,6 @@ class ProjectMetadataService:
             return
 
         await self._clear_field(repo, reference.impact, item_id, installation_id)
-        if reference.priority_index is not None:
-            await self._clear_field(repo, reference.priority_index, item_id, installation_id)
-
-    async def sync_priority_index(
-        self,
-        repo: RepoConfig,
-        issue: dict,
-        installation_id: int,
-        total_impact: float,
-    ) -> None:
-        if not repo.project_v2_priority_index_enabled:
-            return
-        issue_node_id = issue.get("node_id")
-        if not issue_node_id:
-            raise RuntimeError(f"Issue node_id is missing for {repo.owner_repo}#{issue['number']}")
-
-        reference = await self._resolve_project_fields(repo, installation_id)
-        item_id = await self._get_project_item_id(repo, issue_node_id, reference.impact, installation_id)
-        if item_id is None:
-            return
-        await self._sync_priority_index_for_item(
-            repo,
-            reference,
-            item_id,
-            total_impact,
-            installation_id,
-        )
 
     async def _resolve_project_fields(
         self,
@@ -223,9 +188,8 @@ class ProjectMetadataService:
     def _required_field_names(self, repo: RepoConfig) -> list[str]:
         assert repo.project_v2_impact_field_name is not None
         names = [repo.project_v2_impact_field_name]
-        for field_name in (repo.project_v2_priority_field_name, repo.project_v2_priority_index_field_name):
-            if field_name and field_name not in names:
-                names.append(field_name)
+        if repo.project_v2_priority_field_name and repo.project_v2_priority_field_name not in names:
+            names.append(repo.project_v2_priority_field_name)
         return names
 
     def _missing_or_invalid_number_field_names(self, project: dict, repo: RepoConfig) -> list[str]:
@@ -258,11 +222,6 @@ class ProjectMetadataService:
             priority=(
                 self._build_reference_from_project(project, repo.project_v2_priority_field_name, transport)
                 if repo.project_v2_priority_field_name
-                else None
-            ),
-            priority_index=(
-                self._build_reference_from_project(project, repo.project_v2_priority_index_field_name, transport)
-                if repo.project_v2_priority_index_field_name
                 else None
             ),
         )
@@ -396,24 +355,6 @@ class ProjectMetadataService:
             installation_id=installation_id,
         )
 
-    async def _get_number_field_value(
-        self,
-        repo: RepoConfig,
-        reference: ProjectFieldReference,
-        item_id: str,
-        installation_id: int,
-    ) -> float | None:
-        if reference.transport == "personal":
-            client = self._require_personal_client()
-            return await client.get_project_v2_item_number_field_value(item_id, reference.field_name)
-        return await self.github_client.get_project_v2_item_number_field_value(
-            repo.owner,
-            repo.repo,
-            item_id,
-            reference.field_name,
-            installation_id=installation_id,
-        )
-
     async def _clear_field(
         self,
         repo: RepoConfig,
@@ -432,31 +373,4 @@ class ProjectMetadataService:
             item_id,
             reference.field_id,
             installation_id=installation_id,
-        )
-
-    async def _sync_priority_index_for_item(
-        self,
-        repo: RepoConfig,
-        reference: ProjectFieldBundle,
-        item_id: str,
-        total_impact: float,
-        installation_id: int,
-    ) -> None:
-        if reference.priority is None or reference.priority_index is None:
-            return
-        priority_value = await self._get_number_field_value(
-            repo,
-            reference.priority,
-            item_id,
-            installation_id,
-        )
-        if priority_value is None:
-            await self._clear_field(repo, reference.priority_index, item_id, installation_id)
-            return
-        await self._update_number_field(
-            repo,
-            reference.priority_index,
-            item_id,
-            priority_value * total_impact,
-            installation_id,
         )
